@@ -173,17 +173,29 @@ void set_faders_target(client& client, int key, int vel) {
 }
 
 void set_parameter
-(int track, std::string p_name, parameter::GROUP group, int value)
+(int track, std::string p_name, parameter::GROUP group, CONTROL_TYPE type, int value)
 {
     for (auto& track : tracks) {
         for (auto& param : track.params) {
             if (param.name == p_name && param.group == group) {
-                float real_value{0};
+                float real_value;
+                switch (type) {
+                    case RANGE_7BIT:
+                        real_value = (float)value / 127.f;
+                        break;
+                    case RANGE_10BIT:
+                        real_value = (float)value / 1024.f;
+                        break;
+                    case INCREMENTAL:
+                        real_value = parameter.value + value;
+                    case TOGGLE_SW:
+                        real_value = value;
+                }
                 switch (param.unit) {
                     case parameter::DB:
                         break;
                     default: 
-                        real_value = ((float)value / 127.f) * (param.max - param.min) + param.min;
+                        real_value = ((float)value / range) * (param.max - param.min) + param.min;
                         param.value = real_value;
                         break;
                 }
