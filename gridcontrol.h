@@ -28,7 +28,7 @@ constexpr int line_size = 8;
 constexpr int max_lines = 7;
 constexpr int max_buttons = line_size * max_lines;
 constexpr int track_line = 6; //track select line
-constexpr int controls_per_page = 12;
+constexpr int controls_per_page = 16;
 constexpr int ctrl_page_count = 4;
 constexpr int default_param_count = 32;
 

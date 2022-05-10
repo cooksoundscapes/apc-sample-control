@@ -23,9 +23,9 @@ std::array<control_page<>, ctrl_page_count> control_pages;
 
 void populate_params(track_params<>&);
 
-// populate_pages, very soon
+void populate_pages();
 
-int selected_track{0};
+int selected_track{0}, active_ctrl_page{0};
 
 enum FADERS_TARGET {
     ONE_TRACK,
@@ -236,7 +236,20 @@ void set_parameter
 
 void change_track_volume(int channel, int value)
 {
-    set_parameter(channel - 48, "level", parameter::AMP, control_type::RANGE_7BIT, value);
+    set_parameter(channel - APC_FADER_CC, "level", parameter::AMP, control_type::RANGE_7BIT, value);
+}
+
+void use_control_page(int channel, int value)
+{
+    for (const auto& control : control_pages[active_ctrl_page])
+        if (control.id == channel)
+            set_parameter(
+                selected_track, 
+                control.p_name, 
+                control.group,
+                control.ctrl_type,
+                value
+            );
 }
 
 void play_slice(int line, int column, int velocity) 
@@ -274,10 +287,9 @@ void process_midi_input(client& client)
         else if (ev_type == client::E_TYPE::CONTROL) {
             switch(faders_target) {
                 case ONE_TRACK:
-                    break;
+                    use_control_page(addr, value); break;
                 case VOL_MIXER:
-                    change_track_volume(addr, value);
-                    break;
+                    change_track_volume(addr, value); break;
                 case VERB_SEND:
                     break;
             }
@@ -327,12 +339,12 @@ void populate_params(track_params<>& params)
 {
     int i{0};
     //all slider controls
-    params[i++] = {"level", parameter::AMP, parameter::DB, -100, 12, 0 };
+    params[i] = {"level", parameter::AMP, parameter::DB, -100, 12, 0 };
     params[i++] = {"overdrive", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"bitcrush", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"downsamp", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"cutoff", parameter::FILTER, parameter::HZ, 0, 21000, 0 };
-    params[i++] = {"Q", parameter::FILTER, parameter::GENERIC, 0.75, 4, 0 };
+    params[i++] = {"q", parameter::FILTER, parameter::GENERIC, 0.75, 4, 0 };
     params[i++] = {"steepness", parameter::FILTER, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"level", parameter::MODULATION, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"intensity", parameter::MODULATION, parameter::CENT, 0, 200, 0 };
@@ -361,4 +373,28 @@ void populate_params(track_params<>& params)
     params[i++] = {"loop point", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"pitch", parameter::DELAY, parameter::CENT, -1200, 1200, 0 };
     params[i++] = {"tempo", parameter::DELAY, parameter::GENERIC, 0.125, 2, 0 };
+}
+
+void populate_pages() 
+{
+    int i{0}, midi_ch{APC_FADER_CC};
+    control_pages[0][i] = {midi_ch, RANGE_7BIT, "cutoff", parameter::FILTER};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "q", parameter::FILTER};
+    control_pages[0][i++] = {midi_ch, RANGE_7BIT, "steepness", parameter::FILTER};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "downsamp", parameter::AMP};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "level", parameter::MODULATION};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "intensity", parameter::MODULATION};
+    control_pages[0][i++] = {midi_ch, RANGE_7BIT, "waveform", parameter::MODULATION};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "rate", parameter::MODULATION};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "send", parameter::REVERB};
+
+    i = 0;
+    midi_ch = APC_FADER_CC;
+    control_pages[1][i] = {midi_ch, RANGE_7BIT, "level", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "feedback", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "time", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "lowpass", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod intensity", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch, RANGE_7BIT, "mod rate", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "delay send", parameter::REVERB};
 }
