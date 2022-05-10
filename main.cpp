@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <string>
 #include <vector>
+#include <cmath>
 
 using namespace grid_control;
 
@@ -28,10 +29,11 @@ void populate_pages();
 int selected_track{0}, active_ctrl_page{0};
 
 enum FADERS_TARGET {
+    NONE,
     ONE_TRACK,
     VOL_MIXER,
     VERB_SEND
-} faders_target = ONE_TRACK;
+} faders_target = NONE;
 
 /* OSC function overloads */
 
@@ -87,6 +89,9 @@ void turn_all_lights_off(client& client)
     for (int i{0}; i < grid_size; i++) {
         client.output_note(i, 0);
         current_state[i / line_size][i % line_size] = OFF;
+    }
+    for (int i{grid_size+1}; i < APC_SHIFT; i++) {
+        client.output_note(i, 0);
     }
 }
 
@@ -155,20 +160,20 @@ void set_faders_target(client& client, int key, int vel) {
     switch(key) {
         case APC_VOLUME:
             if (faders_target == VOL_MIXER) {
-                faders_target = ONE_TRACK;
+                faders_target = NONE;
                 client.output_note(key, 0);
             } else {
                 faders_target = VOL_MIXER;
                 client.output_note(key, 1);
-                client.output_note(APC_SEND, 0);
+                client.output_note(APC_DEVICE, 0);
             }
             break;
-        case APC_SEND:
-            if (faders_target == VERB_SEND) {
-                faders_target = ONE_TRACK;
+        case APC_DEVICE:
+            if (faders_target == ONE_TRACK) {
+                faders_target = NONE;
                 client.output_note(key, 0);
             } else {
-                faders_target = VERB_SEND;
+                faders_target = ONE_TRACK;
                 client.output_note(key, 1);
                 client.output_note(APC_VOLUME, 0);
             }
@@ -192,22 +197,35 @@ void set_parameter
             float real_value;
             switch (type) {
                 case RANGE_7BIT:
-                    real_value = ((float)value / 127.f) * (param.max - param.min) + param.min;
+                    real_value = ((float)value / (float)RANGE_7BIT);
+                    if (param.unit == parameter::DB)
+                        real_value = sqrt(real_value);
+                    else if (param.unit == parameter::HZ)
+                        real_value = pow(real_value, 3);
+                    real_value = real_value * (param.max - param.min) + param.min;
                     break;
                 case RANGE_10BIT:
-                    real_value = ((float)value / 1024.f) * (param.max - param.min) + param.min;
+                    real_value = ((float)value / (float)RANGE_10BIT);
+                    if (param.unit == parameter::DB)
+                        real_value = sqrt(real_value);
+                    else if (param.unit == parameter::HZ)
+                        real_value = pow(real_value, 3);
+                    real_value = real_value * (param.max - param.min) + param.min;
                     break;
                 case INCREMENTAL:
                     real_value = std::max(param.min, std::min(param.max, param.value + value));
                 case TOGGLE_SW:
                     real_value = !param.value;
+                
             }
             std::string unit{""}, group;
             switch (param.unit) {
                 case parameter::DB:
                     unit = "db"; break;
                 case parameter::CENT:
-                    unit = "cent"; break;
+                    unit = "cent"; 
+                    real_value = trunc(real_value);
+                    break;
                 case parameter::HZ:
                     unit = "hz"; break;
                 default:
@@ -228,7 +246,7 @@ void set_parameter
                     group = "reverb"; break;
             }
             std::string addr{ "/track/" + std::to_string(track) + "/" + group + "/" + p_name };
-            send_osc(addr.c_str(), real_value, unit.c_str());
+            send_osc(addr.c_str(), real_value);
             break;
         }
     }
@@ -246,7 +264,7 @@ void use_control_page(int channel, int value)
             set_parameter(
                 selected_track, 
                 control.p_name, 
-                control.group,
+                control.group,  
                 control.ctrl_type,
                 value
             );
@@ -292,6 +310,8 @@ void process_midi_input(client& client)
                     change_track_volume(addr, value); break;
                 case VERB_SEND:
                     break;
+                default:
+                    break;
             }
         }
     }
@@ -322,6 +342,9 @@ int main()
         track.grid_line = -1;
         populate_params(track.params);
     }   
+
+    populate_pages();
+
     set_line_light(midi_client, track_line, GRN);
 
     signal(SIGINT, exit_handler);
@@ -339,10 +362,12 @@ void populate_params(track_params<>& params)
 {
     int i{0};
     //all slider controls
-    params[i] = {"level", parameter::AMP, parameter::DB, -100, 12, 0 };
+    params[i++] = {"level", parameter::AMP, parameter::DB, -100, 12, 0 };
     params[i++] = {"overdrive", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"bitcrush", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"downsamp", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"pitch", parameter::SOURCE, parameter::CENT, -12, 12, 0 };
+    params[i++] = {"detune", parameter::SOURCE, parameter::CENT, -50, 50, 0 };
     params[i++] = {"cutoff", parameter::FILTER, parameter::HZ, 0, 21000, 0 };
     params[i++] = {"q", parameter::FILTER, parameter::GENERIC, 0.75, 4, 0 };
     params[i++] = {"steepness", parameter::FILTER, parameter::GENERIC, 0, 1, 0 };
@@ -367,7 +392,6 @@ void populate_params(track_params<>& params)
     params[i++] = {"reverse", parameter::DELAY, parameter::GENERIC, 0, 1, 0 };
     //all precision 
     params[i++] = {"file", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"speed", parameter::SOURCE, parameter::CENT, -1200, 1200, 0 };
     params[i++] = {"trim start", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"trim end", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"loop point", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
@@ -378,7 +402,7 @@ void populate_params(track_params<>& params)
 void populate_pages() 
 {
     int i{0}, midi_ch{APC_FADER_CC};
-    control_pages[0][i] = {midi_ch, RANGE_7BIT, "cutoff", parameter::FILTER};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "cutoff", parameter::FILTER};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "q", parameter::FILTER};
     control_pages[0][i++] = {midi_ch, RANGE_7BIT, "steepness", parameter::FILTER};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "downsamp", parameter::AMP};
@@ -387,6 +411,8 @@ void populate_pages()
     control_pages[0][i++] = {midi_ch, RANGE_7BIT, "waveform", parameter::MODULATION};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "rate", parameter::MODULATION};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "send", parameter::REVERB};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "pitch", parameter::SOURCE};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "detune", parameter::SOURCE};
 
     i = 0;
     midi_ch = APC_FADER_CC;

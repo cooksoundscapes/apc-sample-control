@@ -8,10 +8,9 @@ constexpr int APC_DOWN = 65;
 constexpr int APC_LEFT = 66;
 constexpr int APC_RIGHT = 67;
 constexpr int APC_VOLUME = 68;
-constexpr int APC_FADER = 69;
-constexpr int APC_PAN = 70;
-constexpr int APC_SEND = 71;
-constexpr int APC_DEVICE = 72;
+constexpr int APC_PAN = 69;
+constexpr int APC_SEND = 70;
+constexpr int APC_DEVICE = 71;
 constexpr int APC_CLIP_STOP = 82;
 constexpr int APC_SOLO = 83;
 constexpr int APC_REC_ARM = 84;
@@ -30,7 +29,7 @@ constexpr int max_buttons = line_size * max_lines;
 constexpr int track_line = 6; //track select line
 constexpr int controls_per_page = 16;
 constexpr int ctrl_page_count = 4;
-constexpr int default_param_count = 32;
+constexpr int default_param_count = 48;
 
 namespace grid_control {
 
@@ -67,10 +66,10 @@ struct parameter {
 };
 
 enum control_type {
-    RANGE_7BIT,
-    RANGE_10BIT,
-    TOGGLE_SW,
-    INCREMENTAL
+    RANGE_7BIT = 127,
+    RANGE_10BIT = 1023,
+    TOGGLE_SW = 2,
+    INCREMENTAL = 3
 };
 
 //keeps relations between one control and one parameter
