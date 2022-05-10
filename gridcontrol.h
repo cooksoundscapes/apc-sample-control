@@ -19,8 +19,9 @@ constexpr int APC_MUTE = 85;
 constexpr int APC_SELECT = 86;
 constexpr int APC_USER_1 = 87;
 constexpr int APC_USER_2 = 88;
-constexpr int APC_STOP_ALL_CIPS = 89;
+constexpr int APC_STOP_ALL_CLIPS = 89;
 constexpr int APC_SHIFT = 98;
+constexpr int APC_FADER_CC = 48;
 
 // program setup;
 constexpr int line_size = 8;
@@ -60,9 +61,7 @@ struct parameter {
         DB,
         CENT,
         HZ,
-        GENERIC,
-        RATIO,
-        DYNAMIC
+        GENERIC
     } unit;
     float min, max, value;
 };
@@ -74,7 +73,7 @@ enum control_type {
     INCREMENTAL
 };
 
-//keeps relations between one ontrol and one parameter
+//keeps relations between one control and one parameter
 struct param_control {
     int id; //or midi channel
     control_type ctrl_type;

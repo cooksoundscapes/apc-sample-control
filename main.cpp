@@ -56,6 +56,10 @@ void send_osc(const char* address, float f_value) {
     lo_send(osc_dest, address, "f", f_value);
 }
 
+void send_osc(const char* address, float f_value, const char* str_value) {
+    lo_send(osc_dest, address, "fs", f_value, str_value);
+}
+
 /* midi out events for setting lights */
 
 void set_light(client& client, int line, int col, light_color color) {
@@ -172,42 +176,67 @@ void set_faders_target(client& client, int key, int vel) {
     }
 }
 
-void set_parameter
-(int track, std::string p_name, parameter::GROUP group, CONTROL_TYPE type, int value)
+void set_parameter_max_value
+(int track, std::string p_name, parameter::GROUP group, int max)
 {
-    for (auto& track : tracks) {
-        for (auto& param : track.params) {
-            if (param.name == p_name && param.group == group) {
-                float real_value;
-                switch (type) {
-                    case RANGE_7BIT:
-                        real_value = (float)value / 127.f;
-                        break;
-                    case RANGE_10BIT:
-                        real_value = (float)value / 1024.f;
-                        break;
-                    case INCREMENTAL:
-                        real_value = parameter.value + value;
-                    case TOGGLE_SW:
-                        real_value = value;
-                }
-                switch (param.unit) {
-                    case parameter::DB:
-                        break;
-                    default: 
-                        real_value = ((float)value / range) * (param.max - param.min) + param.min;
-                        param.value = real_value;
-                        break;
-                }
-                break;
+    for (auto& param : tracks[track].params)
+        if (param.name == p_name && param.group == group)
+            param.max = max;
+}
+
+void set_parameter
+(int track, std::string p_name, parameter::GROUP group, control_type type, int value)
+{
+    for (auto& param : tracks[track].params) {
+        if (param.name == p_name && param.group == group) {
+            float real_value;
+            switch (type) {
+                case RANGE_7BIT:
+                    real_value = ((float)value / 127.f) * (param.max - param.min) + param.min;
+                    break;
+                case RANGE_10BIT:
+                    real_value = ((float)value / 1024.f) * (param.max - param.min) + param.min;
+                    break;
+                case INCREMENTAL:
+                    real_value = std::max(param.min, std::min(param.max, param.value + value));
+                case TOGGLE_SW:
+                    real_value = !param.value;
             }
+            std::string unit{""}, group;
+            switch (param.unit) {
+                case parameter::DB:
+                    unit = "db"; break;
+                case parameter::CENT:
+                    unit = "cent"; break;
+                case parameter::HZ:
+                    unit = "hz"; break;
+                default:
+                    break;
+            }
+            switch (param.group) {
+                case parameter::SOURCE:
+                    group = "source"; break;
+                case parameter::AMP:
+                    group = "amp"; break;
+                case parameter::FILTER:
+                    group = "filter"; break;
+                case parameter::MODULATION:
+                    group = "modulation"; break;
+                case parameter::DELAY:
+                    group = "delay"; break;
+                case parameter::REVERB:
+                    group = "reverb"; break;
+            }
+            std::string addr{ "/track/" + std::to_string(track) + "/" + group + "/" + p_name };
+            send_osc(addr.c_str(), real_value, unit.c_str());
+            break;
         }
     }
 }
 
 void change_track_volume(int channel, int value)
 {
-
+    set_parameter(channel - 48, "level", parameter::AMP, control_type::RANGE_7BIT, value);
 }
 
 void play_slice(int line, int column, int velocity) 
@@ -325,11 +354,11 @@ void populate_params(track_params<>& params)
     params[i++] = {"interpolation", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"reverse", parameter::DELAY, parameter::GENERIC, 0, 1, 0 };
     //all precision 
-    params[i++] = {"file", parameter::SOURCE, parameter::DYNAMIC, 0, 1, 0 };
+    params[i++] = {"file", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"speed", parameter::SOURCE, parameter::CENT, -1200, 1200, 0 };
-    params[i++] = {"trim start", parameter::SOURCE, parameter::DYNAMIC, 0, 1, 0 };
-    params[i++] = {"trim end", parameter::SOURCE, parameter::DYNAMIC, 0, 1, 0 };
-    params[i++] = {"loop point", parameter::SOURCE, parameter::DYNAMIC, 0, 1, 0 };
+    params[i++] = {"trim start", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"trim end", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"loop point", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"pitch", parameter::DELAY, parameter::CENT, -1200, 1200, 0 };
-    params[i++] = {"tempo", parameter::DELAY, parameter::RATIO, 0.125, 2, 0 };
+    params[i++] = {"tempo", parameter::DELAY, parameter::GENERIC, 0.125, 2, 0 };
 }
