@@ -96,6 +96,7 @@ struct track {
     sample_type type;
     track_params<> params;  
     int grid_line;
+    int lit_line_button;
 };
 
 }   

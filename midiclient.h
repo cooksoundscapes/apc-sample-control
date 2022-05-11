@@ -2,13 +2,13 @@
 #include <alsa/asoundlib.h>
 #include <array>
 
-struct client 
+struct midi_client 
 {
     snd_seq_t* seq_handle;
     int midi_in, midi_out;
 
-    client();
-    ~client();
+    midi_client();
+    ~midi_client();
 
     enum E_TYPE {
         NOTE,

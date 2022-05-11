@@ -1,4 +1,5 @@
 #include "midiclient.h"
+#include <alsa/seq.h>
 #include <alsa/seq_event.h>
 #include <alsa/seqmid.h>
 #include <iostream>
@@ -6,7 +7,7 @@
 void note_printout(snd_seq_event_t* event);
 void midi_printout(snd_seq_event_t* event);
 
-client::client() {
+midi_client::midi_client() {
     snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_DUPLEX, 0);
     snd_seq_set_client_name(seq_handle, "Grid Control");
     midi_in = snd_seq_create_simple_port(
@@ -23,11 +24,11 @@ client::client() {
     );
 }
 
-client::~client() {
+midi_client::~midi_client() {
     snd_seq_close(seq_handle);
 }
 
-void client::connect(int sender_id, int sender_port, int dest_id, int dest_port)
+void midi_client::connect(int sender_id, int sender_port, int dest_id, int dest_port)
 {
     snd_seq_addr_t sender, dest;
     snd_seq_port_subscribe_t* subs;
@@ -41,7 +42,7 @@ void client::connect(int sender_id, int sender_port, int dest_id, int dest_port)
     snd_seq_subscribe_port(seq_handle, subs);
 }
 
-int client::get_midi_event(int& ev_type, int &addr, int &value)
+int midi_client::get_midi_event(int& ev_type, int &addr, int &value)
 {
     int count;
     snd_seq_event_t* event = NULL;
@@ -70,7 +71,7 @@ int client::get_midi_event(int& ev_type, int &addr, int &value)
     return count;
 }
 
-void client::output_note(unsigned char key, unsigned char velocity)
+void midi_client::output_note(unsigned char key, unsigned char velocity)
 {
     snd_seq_event_t event;
     snd_seq_ev_clear(&event);

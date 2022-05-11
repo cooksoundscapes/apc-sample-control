@@ -1,5 +1,7 @@
 #include "gridcontrol.h"
-#include "midiclient.h"
+//#include "midiclient.h"
+#include "jackmidi.h"
+#include "oscserver.h"
 
 #include <lo/lo.h>
 #include <lo/lo_types.h>
@@ -9,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <functional>
 
 using namespace grid_control;
 
@@ -64,26 +67,26 @@ void send_osc(const char* address, float f_value, const char* str_value) {
 
 /* midi out events for setting lights */
 
-void set_light(client& client, int line, int col, light_color color) {
+void set_light(midi_client& client, int line, int col, light_color color) {
     u_int8_t key = line * line_size + col;
     client.output_note(key, (u_int8_t)color);
     current_state[line][col] = color;
 }
 
-void set_line_light(client& client, int line, light_color color)
+void set_line_light(midi_client& client, int line, light_color color)
 {   
     for (int i{0}; i < line_size; i++)
         set_light(client, line, i, color);
 }
 
-void set_column_light(client& client, int column, light_color color)
+void set_column_light(midi_client& client, int column, light_color color)
 {
     for (int i{0}; i < max_lines; i++) {
         set_light(client, i, column, color);
     }   
 }
 
-void turn_all_lights_off(client& client)
+void turn_all_lights_off(midi_client& client)
 {
     int grid_size = line_size * line_size;
     for (int i{0}; i < grid_size; i++) {
@@ -97,7 +100,7 @@ void turn_all_lights_off(client& client)
 
 /* routines for grid controls */
 
-void select_track(client& client, int track)
+void select_track(midi_client& client, int track)
 {
     //when de-selecting, fallback to green or off;
     light_color last_selected{GRN};
@@ -118,7 +121,7 @@ void select_track(client& client, int track)
     }
 }
 
-bool toggle_loop_track(client& client, int line, int column, int vel) 
+bool toggle_loop_track(midi_client& client, int line, int column, int vel) 
 {
     static int track_pressed{-1};
     
@@ -156,7 +159,25 @@ bool toggle_loop_track(client& client, int line, int column, int vel)
     return track_pressed >= 0;
 }
 
-void set_faders_target(client& client, int key, int vel) {
+void update_track_positions(midi_client& client) {
+    for (size_t i{0}; i < tracks.size(); i++)
+        if (tracks[i].type == LOOP) 
+        {
+            auto& track = tracks[i];
+            if (track.lit_line_button >= 0) {
+                light_color fallback_light;
+                if (selected_track == i)
+                    fallback_light = YLW;
+                else
+                    fallback_light = OFF;
+                set_light(client, track.grid_line, track.lit_line_button, fallback_light);
+            }
+            track.lit_line_button = osc_server::track_position(i);
+            set_light(client, track.grid_line, track.lit_line_button, GRN);
+        }
+}
+
+void set_faders_target(midi_client& client, int key, int vel) {
     switch(key) {
         case APC_VOLUME:
             if (faders_target == VOL_MIXER) {
@@ -280,80 +301,77 @@ void play_slice(int line, int column, int velocity)
 }
 
 /* main hub for actions */
-void process_midi_input(client& client)
+void process_midi_input(midi_client& client, int ev_type, int addr, int value)
 {
-    int ev_type, addr, value, line, column;
-
-    while (client.get_midi_event(ev_type, addr, value) >= 0)
-    {
-        if (ev_type == client::E_TYPE::NOTE) {
-            if (addr < max_buttons) {
-                line = addr / line_size;
-                column = addr % line_size;
-                //routines
-                if (line == track_line)
-                    select_track(client, column);
-                bool track_is_pressed = toggle_loop_track(client, line, column, value);
-                if (!track_is_pressed && line != track_line)
-                    play_slice(line, column, value);
-            }
-            else {
-                if (value > 0) 
-                    set_faders_target(client, addr, value);
-            }
+    int line, column;
+    if (ev_type == midi_client::E_TYPE::NOTEON || ev_type == midi_client::E_TYPE::NOTEOFF) {
+        if (addr < max_buttons) {
+            line = addr / line_size;
+            column = addr % line_size;
+            //routines
+            if (line == track_line)
+                select_track(client, column);
+            bool track_is_pressed = toggle_loop_track(client, line, column, value);
+            if (!track_is_pressed && line != track_line)
+                play_slice(line, column, value);
         }
-        else if (ev_type == client::E_TYPE::CONTROL) {
-            switch(faders_target) {
-                case ONE_TRACK:
-                    use_control_page(addr, value); break;
-                case VOL_MIXER:
-                    change_track_volume(addr, value); break;
-                case VERB_SEND:
-                    break;
-                default:
-                    break;
-            }
+        else {
+            if (value > 0) 
+                set_faders_target(client, addr, value);
+        }
+    }
+    else if (ev_type == midi_client::E_TYPE::CONTROL) {
+        switch(faders_target) {
+            case ONE_TRACK:
+                use_control_page(addr, value); break;
+            case VOL_MIXER:
+                change_track_volume(addr, value); break;
+            case VERB_SEND:
+                break;
+            default:
+                break;
         }
     }
 }
 
 /*Main program execution*/
-client midi_client;
+midi_client client;
 
 void exit_handler(sig_atomic_t s) {
-    turn_all_lights_off(midi_client);
+    turn_all_lights_off(client);
     exit(0);
 }
 
 int main() 
-{
-    /* temporarily hard coding client ids */
-    int apc_midi_id = 24;
-    int grid_control_id = 128;
-    midi_client.connect(apc_midi_id, 0, grid_control_id, 0);
-    midi_client.connect(grid_control_id, 1, apc_midi_id, 0);
- 
+{ 
     /* set OSC client port */
     osc_dest = lo_address_new(NULL, "4444");
+
+    osc_server osc_serv{"4445", line_size};
 
     /* initialize tracks */
     for (auto& track : tracks) {
         track.type = SHORT;
         track.grid_line = -1;
+        track.lit_line_button = -1;
         populate_params(track.params);
     }   
 
+    midi_client::midi_callback process_midi = process_midi_input;
+
+    client.register_midi_callback(process_midi);
+
     populate_pages();
 
-    set_line_light(midi_client, track_line, GRN);
+    set_line_light(client, track_line, GRN);
 
     signal(SIGINT, exit_handler);
 
     /* enter main loop */
     while (1) {
-        process_midi_input(midi_client);
+        //update_track_positions(midi_client);
     }
-
+    
     return 0;
 }
 
@@ -372,7 +390,7 @@ void populate_params(track_params<>& params)
     params[i++] = {"q", parameter::FILTER, parameter::GENERIC, 0.75, 4, 0 };
     params[i++] = {"steepness", parameter::FILTER, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"level", parameter::MODULATION, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"intensity", parameter::MODULATION, parameter::CENT, 0, 200, 0 };
+    params[i++] = {"intensity", parameter::MODULATION, parameter::HZ, 0, 16, 0 };
     params[i++] = {"rate", parameter::MODULATION, parameter::HZ, 0, 12, 0 };
     params[i++] = {"waveform", parameter::MODULATION, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"level", parameter::DELAY, parameter::DB, -100, 0, 0 };
