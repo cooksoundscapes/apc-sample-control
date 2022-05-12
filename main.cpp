@@ -103,14 +103,13 @@ void turn_all_lights_off(midi_client& client)
 void select_track(midi_client& client, int track)
 {
     //when de-selecting, fallback to green or off;
-    light_color last_selected{GRN};
-
+    light_color fallback_light{GRN};
     if (tracks[selected_track].type == LOOP)
-        last_selected = OFF;
+        fallback_light = OFF;
 
-    set_light(client, track_line, selected_track, last_selected);
+    set_light(client, track_line, selected_track, fallback_light);
     if (tracks[selected_track].type == LOOP) {
-        set_line_light(client, tracks[selected_track].grid_line, last_selected);
+        set_line_light(client, tracks[selected_track].grid_line, fallback_light);
     }
 
     selected_track = track;
@@ -163,17 +162,19 @@ void update_track_positions(midi_client& client) {
     for (size_t i{0}; i < tracks.size(); i++)
         if (tracks[i].type == LOOP) 
         {
-            auto& track = tracks[i];
-            if (track.lit_line_button >= 0) {
-                light_color fallback_light;
-                if (selected_track == i)
-                    fallback_light = YLW;
-                else
-                    fallback_light = OFF;
-                set_light(client, track.grid_line, track.lit_line_button, fallback_light);
+            if (osc_server::track_position(i) != tracks[i].lit_line_button) {
+                auto& track = tracks[i];
+                if (track.lit_line_button >= 0) { //if is lit
+                    light_color fallback_light;
+                    if (selected_track == i)
+                        fallback_light = YLW;
+                    else
+                        fallback_light = OFF;
+                    set_light(client, track.grid_line, track.lit_line_button, fallback_light);
+                }
+                track.lit_line_button = osc_server::track_position(i);
+                set_light(client, track.grid_line, track.lit_line_button, GRN);
             }
-            track.lit_line_button = osc_server::track_position(i);
-            set_light(client, track.grid_line, track.lit_line_button, GRN);
         }
 }
 
@@ -344,11 +345,6 @@ void exit_handler(sig_atomic_t s) {
 
 int main() 
 { 
-    /* set OSC client port */
-    osc_dest = lo_address_new(NULL, "4444");
-
-    osc_server osc_serv{"4445", line_size};
-
     /* initialize tracks */
     for (auto& track : tracks) {
         track.type = SHORT;
@@ -357,8 +353,11 @@ int main()
         populate_params(track.params);
     }   
 
-    midi_client::midi_callback process_midi = process_midi_input;
+    /* set OSC ports */
+    osc_dest = lo_address_new(NULL, "4444");
+    osc_server osc_serv{"4445", line_size};
 
+    midi_client::midi_callback process_midi = process_midi_input;
     client.register_midi_callback(process_midi);
 
     populate_pages();
@@ -369,9 +368,9 @@ int main()
 
     /* enter main loop */
     while (1) {
-        //update_track_positions(midi_client);
+        update_track_positions(client);
     }
-    
+
     return 0;
 }
 

@@ -18,7 +18,7 @@ struct midi_client
 
     using midi_event = std::array<u_int8_t, 3>;
 
-    std::array<midi_event, 128> event_pool;
+    std::array<midi_event, 256> event_pool;
 
     size_t playback_index{0};
 
