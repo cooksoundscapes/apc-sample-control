@@ -2,6 +2,8 @@
 #include <jack/jack.h>
 #include <jack/types.h>
 #include <functional>
+#include <vector>
+#include <array>
 
 struct midi_client 
 {
@@ -13,6 +15,12 @@ struct midi_client
     jack_port_t* out_port;
 
     using midi_callback = std::function<void(midi_client&, int, int, int)>;
+
+    using midi_event = std::array<u_int8_t, 3>;
+
+    std::array<midi_event, 128> event_pool;
+
+    size_t playback_index{0};
 
     midi_callback callback;
 

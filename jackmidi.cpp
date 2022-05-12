@@ -20,9 +20,8 @@ midi_client::midi_client()
         return;
     }
 
-    if (jack_connect(client, "APC MINI[24](capture):APC MINI MIDI 1", "grid-control:midi_in") != 0)
-        std::cout << "failed to connect \n";
-    //jack_connect(client, "grid-control:midi_out", "APC MINI[24](playback):APC MINI MIDI 1");
+    jack_connect(client, "a2j:APC MINI [24] (capture): APC MINI MIDI 1", "grid-control:midi_in");
+    jack_connect(client, "grid-control:midi_out", "a2j:APC MINI [24] (playback): APC MINI MIDI 1");
 }
 
 midi_client::~midi_client() {
@@ -45,10 +44,13 @@ int midi_client::process(jack_nframes_t nframes) {
     
     void* in_port_buf = jack_port_get_buffer(in_port, nframes);
     void* out_port_buf = jack_port_get_buffer(out_port, nframes);
+
     jack_midi_event_t event;
 
-    jack_nframes_t ev_count = jack_midi_get_event_count(in_port_buf);
+    jack_midi_clear_buffer(out_port_buf);
 
+    /* process midi in */
+    jack_nframes_t ev_count = jack_midi_get_event_count(in_port_buf);
     for (int i{0}; i < ev_count; i++) {
         jack_midi_event_get(&event, in_port_buf, i);
         if (event.size >= 3) {
@@ -60,18 +62,27 @@ int midi_client::process(jack_nframes_t nframes) {
             );
         }
     }
-
+    /* process midi out */
+    for (int i{0}; i < nframes; i++) 
+    {
+        for (int e{0}; e < playback_index; e++)
+        {
+            u_int8_t* buffer = jack_midi_event_reserve(out_port_buf, 0, 3);
+            if (buffer == 0) {
+                std::cerr << "error writing midi event!\n";
+            } else {
+                buffer[0] = event_pool.at(e)[0]; 
+                buffer[1] = event_pool.at(e)[1]; 
+                buffer[2] = event_pool.at(e)[2];
+            }
+        }
+        playback_index = 0;
+    } 
     return 0;
 }
 
-int midi_client::get_midi_event(int &ev_type, int &addr, int &value) {
-    return -1;
-}
-
-void midi_client::connect(int sender_id, int sender_port, int dest_id, int dest_port) {
-
-}
-
-void midi_client::output_note(unsigned char key, unsigned char velocity) {
-    
+void midi_client::output_note(u_int8_t key, u_int8_t velocity) 
+{
+    event_pool[playback_index] = {NOTEON, key, velocity};
+    playback_index++;
 }
