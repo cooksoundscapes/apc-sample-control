@@ -43,7 +43,16 @@ enum light_color {
 enum sample_type {
     SHORT,
     LOOP,
-    LONG
+    LONG,
+    MELODIC
+};
+
+enum track_state {
+    STOPPED,
+    PLAYING,
+    RECORDING,
+    ARMED_FOR_REC,
+    WAITING_CUE
 };
 
 struct parameter {
@@ -97,6 +106,7 @@ struct track {
     track_params<> params;  
     int grid_line;
     int lit_line_button;
+    track_state state;
 };
 
 }   

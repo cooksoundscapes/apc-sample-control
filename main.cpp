@@ -111,7 +111,6 @@ void select_track(midi_client& client, int track)
     if (tracks[selected_track].type == LOOP) {
         set_line_light(client, tracks[selected_track].grid_line, fallback_light);
     }
-
     selected_track = track;
 
     set_light(client, track_line, selected_track, YLW);
@@ -123,14 +122,12 @@ void select_track(midi_client& client, int track)
 bool toggle_loop_track(midi_client& client, int line, int column, int vel) 
 {
     static int track_pressed{-1};
-    
+
     if (line == track_line) {
-        if (vel == 0) {
+        if (vel == 0)
             track_pressed = -1;
-        }
-        else {
+        else
             track_pressed = column;
-        }
     } else {
         if (track_pressed >= 0 && vel > 0) {
             auto& track = tracks[track_pressed];
@@ -138,12 +135,9 @@ bool toggle_loop_track(midi_client& client, int line, int column, int vel)
                 set_line_light(client, track.grid_line, OFF);
                 if (track.grid_line == line) {
                     track.type = SHORT;
-                    /**/
                     std::string addr{ "/track/"+std::to_string(track_pressed) + "/type"};
                     send_osc(addr.c_str(), "short");
-                    /**/
                     track.grid_line = -1;
-                    set_line_light(client, line, OFF);
                     return track_pressed >= 0;
                 }
             } else {
@@ -158,26 +152,6 @@ bool toggle_loop_track(midi_client& client, int line, int column, int vel)
     return track_pressed >= 0;
 }
 
-void update_track_positions(midi_client& client) {
-    for (size_t i{0}; i < tracks.size(); i++)
-        if (tracks[i].type == LOOP) 
-        {
-            if (osc_server::track_position(i) != tracks[i].lit_line_button) {
-                auto& track = tracks[i];
-                if (track.lit_line_button >= 0) { //if is lit
-                    light_color fallback_light;
-                    if (selected_track == i)
-                        fallback_light = YLW;
-                    else
-                        fallback_light = OFF;
-                    set_light(client, track.grid_line, track.lit_line_button, fallback_light);
-                }
-                track.lit_line_button = osc_server::track_position(i);
-                set_light(client, track.grid_line, track.lit_line_button, GRN);
-            }
-        }
-}
-
 void set_faders_target(midi_client& client, int key, int vel) {
     switch(key) {
         case APC_VOLUME:
@@ -187,6 +161,18 @@ void set_faders_target(midi_client& client, int key, int vel) {
             } else {
                 faders_target = VOL_MIXER;
                 client.output_note(key, 1);
+                client.output_note(APC_DEVICE, 0);
+                client.output_note(APC_SEND, 0);
+            }
+            break;
+        case APC_SEND:
+            if (faders_target == VERB_SEND) {
+                faders_target = NONE;
+                client.output_note(key, 0);
+            } else {
+                faders_target = VERB_SEND;
+                client.output_note(key, 1);
+                client.output_note(APC_VOLUME, 0);
                 client.output_note(APC_DEVICE, 0);
             }
             break;
@@ -198,6 +184,7 @@ void set_faders_target(midi_client& client, int key, int vel) {
                 faders_target = ONE_TRACK;
                 client.output_note(key, 1);
                 client.output_note(APC_VOLUME, 0);
+                client.output_note(APC_SEND, 0);
             }
             break;
     }
@@ -274,11 +261,6 @@ void set_parameter
     }
 }
 
-void change_track_volume(int channel, int value)
-{
-    set_parameter(channel - APC_FADER_CC, "level", parameter::AMP, control_type::RANGE_7BIT, value);
-}
-
 void use_control_page(int channel, int value)
 {
     for (const auto& control : control_pages[active_ctrl_page])
@@ -290,6 +272,14 @@ void use_control_page(int channel, int value)
                 control.ctrl_type,
                 value
             );
+}
+
+void change_track_volume(int channel, int value) {
+    set_parameter(channel - APC_FADER_CC, "level", parameter::AMP, control_type::RANGE_7BIT, value);
+}
+
+void change_track_reverb(int channel, int value) {
+    set_parameter(channel - APC_FADER_CC, "send", parameter::REVERB, control_type::RANGE_7BIT, value);
 }
 
 void play_slice(int line, int column, int velocity) 
@@ -310,7 +300,7 @@ void process_midi_input(midi_client& client, int ev_type, int addr, int value)
             line = addr / line_size;
             column = addr % line_size;
             //routines
-            if (line == track_line)
+            if (line == track_line && value > 0)
                 select_track(client, column);
             bool track_is_pressed = toggle_loop_track(client, line, column, value);
             if (!track_is_pressed && line != track_line)
@@ -328,6 +318,7 @@ void process_midi_input(midi_client& client, int ev_type, int addr, int value)
             case VOL_MIXER:
                 change_track_volume(addr, value); break;
             case VERB_SEND:
+                change_track_reverb(addr, value); break;
                 break;
             default:
                 break;
@@ -337,6 +328,34 @@ void process_midi_input(midi_client& client, int ev_type, int addr, int value)
 
 /*Main program execution*/
 midi_client client;
+
+/* reactive functions for upcoming OSC messages */
+
+void update_track_position(int track, int position) {
+    if (track < tracks.size()) {
+        auto& target = tracks[track];
+        if (target.grid_line >= 0 && target.lit_line_button >= 0) {
+            light_color fallback_light = OFF;
+            if (selected_track == track) fallback_light = YLW;
+            set_light(client, target.grid_line, target.lit_line_button, fallback_light);
+        }
+        target.lit_line_button = position;
+        set_light(client, target.grid_line, target.lit_line_button, GRN);
+    }
+}
+
+void update_track_state(int track, int state) {
+    if (track < tracks.size()) {
+        auto& target = tracks[track];
+        if (state == STOPPED && target.grid_line >= 0 && target.lit_line_button >= 0) {
+            light_color fallback_light = OFF;
+            if (selected_track == track) fallback_light = YLW;
+            set_light(client, target.grid_line, target.lit_line_button, fallback_light);
+        }
+        target.state = (track_state)state;
+        target.lit_line_button = -1;
+    }
+}
 
 void exit_handler(sig_atomic_t s) {
     turn_all_lights_off(client);
@@ -350,12 +369,17 @@ int main()
         track.type = SHORT;
         track.grid_line = -1;
         track.lit_line_button = -1;
+        track.state = STOPPED;
         populate_params(track.params);
     }   
 
     /* set OSC ports */
     osc_dest = lo_address_new(NULL, "4444");
-    osc_server osc_serv{"4445", line_size};
+    /* osc_serv should be able to Modify Track array */
+    osc_server osc_serv{"4445"};
+
+    osc_serv.play_position_calback = update_track_position;
+    osc_serv.track_state_callback = update_track_state;
 
     midi_client::midi_callback process_midi = process_midi_input;
     client.register_midi_callback(process_midi);
@@ -367,9 +391,7 @@ int main()
     signal(SIGINT, exit_handler);
 
     /* enter main loop */
-    while (1) {
-        update_track_positions(client);
-    }
+    while (1) {}
 
     return 0;
 }
@@ -380,7 +402,7 @@ void populate_params(track_params<>& params)
     int i{0};
     //all slider controls
     params[i++] = {"level", parameter::AMP, parameter::DB, -100, 12, 0 };
-    params[i++] = {"overdrive", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"overdrive", parameter::AMP, parameter::GENERIC, 0, 80, 0 };
     params[i++] = {"bitcrush", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"downsamp", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"pitch", parameter::SOURCE, parameter::CENT, -12, 12, 0 };
@@ -420,24 +442,23 @@ void populate_pages()
 {
     int i{0}, midi_ch{APC_FADER_CC};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "cutoff", parameter::FILTER};
-    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "q", parameter::FILTER};
     control_pages[0][i++] = {midi_ch, RANGE_7BIT, "steepness", parameter::FILTER};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "q", parameter::FILTER};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "downsamp", parameter::AMP};
+    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "overdrive", parameter::AMP};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "level", parameter::MODULATION};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "intensity", parameter::MODULATION};
-    control_pages[0][i++] = {midi_ch, RANGE_7BIT, "waveform", parameter::MODULATION};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "rate", parameter::MODULATION};
-    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "send", parameter::REVERB};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "pitch", parameter::SOURCE};
-    control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "detune", parameter::SOURCE};
+    //control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "detune", parameter::SOURCE};
 
     i = 0;
     midi_ch = APC_FADER_CC;
-    control_pages[1][i] = {midi_ch, RANGE_7BIT, "level", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "level", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "feedback", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "time", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "lowpass", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod intensity", parameter::DELAY};
-    control_pages[1][i++] = {midi_ch, RANGE_7BIT, "mod rate", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod rate", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "delay send", parameter::REVERB};
 }

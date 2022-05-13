@@ -6,13 +6,12 @@
 #include <lo/lo_types.h>
 #include <sys/select.h>
 
-std::vector<int> osc_server::track_positions;
+std::function<void(int, int)> osc_server::play_position_calback;
+std::function<void(int, int)> osc_server::track_state_callback;
 
-osc_server::osc_server(const char* port, int track_count)
+osc_server::osc_server(const char* port)
 {
     server = lo_server_thread_new(port, error_handler);
-
-    track_positions.resize(track_count);
 
     lo_server_thread_add_method(
         server, 
@@ -21,10 +20,14 @@ osc_server::osc_server(const char* port, int track_count)
         play_position_handler,
         NULL
     );
-
+    lo_server_thread_add_method(
+        server, 
+        "/track/state", 
+        "ff", 
+        track_state_handler,
+        NULL
+    );
     lo_server_thread_start(server);
-
-    //file_descriptor = lo_server_get_socket_fd(server);
 }
 
 osc_server::~osc_server() {
@@ -39,15 +42,19 @@ void osc_server::error_handler(int num, const char* msg , const char* path)
 int osc_server::play_position_handler
 (const char *path, const char *types, lo_arg **argv, int argc, void *data, void *user_data)
 {
-    if (argc > 2) return 1;
-
+    if (argc < 2) return 1;
     float track = argv[0]->f;
     float pos = argv[1]->f;
-    track_positions[track] = (int)pos;
-
+    play_position_calback(track, pos);
     return 0;
 }
 
-int osc_server::track_position(int track) {
-    return track_positions[track];
+int osc_server::track_state_handler
+(const char *path, const char *types, lo_arg **argv, int argc, void *data, void *user_data)
+{
+    if (argc < 2) return 1;
+    float track = argv[0]->f;
+    float state = argv[1]->f;
+    track_state_callback(track, state);
+    return 0;
 }
