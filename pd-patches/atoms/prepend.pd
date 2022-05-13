@@ -1,0 +1,16 @@
+#N canvas 458 221 450 300 12;
+#X obj 106 117 inlet;
+#X obj 106 142 list prepend;
+#X obj 106 167 list trim;
+#X obj 106 192 outlet;
+#X obj 220 72 loadbang;
+#X msg 220 97 args;
+#X obj 220 122 pdcontrol;
+#X obj 187 36 inlet;
+#X connect 0 0 1 0;
+#X connect 1 0 2 0;
+#X connect 2 0 3 0;
+#X connect 4 0 5 0;
+#X connect 5 0 6 0;
+#X connect 6 0 1 1;
+#X connect 7 0 1 1;

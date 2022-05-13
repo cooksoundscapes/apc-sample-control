@@ -30,6 +30,12 @@
 
 * ToDo (PD):
     checar ação de speed e trims em sample player
+    adicionar efeito tremolo
+    OU adicionar LFOs multi uso
+    adicionar Envelope no filtro
+        - apenas shorts?
+    slice mode que só toca slice = short?
+
 
 ==============================================
 
