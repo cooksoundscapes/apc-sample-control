@@ -418,23 +418,24 @@ void populate_params(track_params<>& params)
     params[i++] = {"feedback", parameter::DELAY, parameter::DB, -100, 0, 0 };
     params[i++] = {"lowpass", parameter::DELAY, parameter::HZ, 0, 21000, 0 };
     params[i++] = {"highpass", parameter::DELAY, parameter::HZ, 0, 21000, 0 };
-    params[i++] = {"mod intensity", parameter::DELAY, parameter::CENT, 0, 200, 0 };
-    params[i++] = {"mod rate", parameter::DELAY, parameter::HZ, 0, 12, 0 };
-    params[i++] = {"mod waveform", parameter::DELAY, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"mod-intensity", parameter::DELAY, parameter::CENT, 0, 200, 0 };
+    params[i++] = {"mod-rate", parameter::DELAY, parameter::HZ, 0, 12, 0 };
+    params[i++] = {"mod-waveform", parameter::DELAY, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"send", parameter::REVERB, parameter::DB, -100, 0, 0 };
-    params[i++] = {"delay send", parameter::REVERB, parameter::DB, -100, 0, 0 };
+    params[i++] = {"delay", parameter::REVERB, parameter::DB, -100, 0, 0 };
     //all toggle controls
     params[i++] = {"reverse", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"loop", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"hard clip", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"hard-clip", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"interpolation", parameter::AMP, parameter::GENERIC, 0, 1, 0 };
     params[i++] = {"reverse", parameter::DELAY, parameter::GENERIC, 0, 1, 0 };
     //all precision 
     params[i++] = {"file", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"trim start", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"trim end", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"loop point", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
-    params[i++] = {"pitch", parameter::DELAY, parameter::CENT, -1200, 1200, 0 };
+    params[i++] = {"trim-start", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"trim-end", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"loop-point", parameter::SOURCE, parameter::GENERIC, 0, 1, 0 };
+    params[i++] = {"pitch", parameter::DELAY, parameter::CENT, -12, 12, 0 };
+    params[i++] = {"detune", parameter::DELAY, parameter::CENT, -50, 50, 0 };
     params[i++] = {"tempo", parameter::DELAY, parameter::GENERIC, 0.125, 2, 0 };
 }
 
@@ -450,7 +451,6 @@ void populate_pages()
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "intensity", parameter::MODULATION};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "rate", parameter::MODULATION};
     control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "pitch", parameter::SOURCE};
-    //control_pages[0][i++] = {midi_ch++, RANGE_7BIT, "detune", parameter::SOURCE};
 
     i = 0;
     midi_ch = APC_FADER_CC;
@@ -458,7 +458,7 @@ void populate_pages()
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "feedback", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "time", parameter::DELAY};
     control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "lowpass", parameter::DELAY};
-    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod intensity", parameter::DELAY};
-    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod rate", parameter::DELAY};
-    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "delay send", parameter::REVERB};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod-intensity", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "mod-rate", parameter::DELAY};
+    control_pages[1][i++] = {midi_ch++, RANGE_7BIT, "delay", parameter::REVERB};
 }

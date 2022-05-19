@@ -1,2 +1,2 @@
 all:
-	g++ -o grid_control main.cpp oscserver.cpp jackmidi.cpp -llo -ljack
+	g++ -Isrc -o grid_control src/main.cpp src/oscserver.cpp src/jackmidi.cpp -llo -ljack

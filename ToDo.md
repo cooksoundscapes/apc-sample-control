@@ -29,6 +29,8 @@
 
 
 * ToDo (PD):
+    Metronome I/O
+    Recording I/O
     checar ação de speed e trims em sample player
     adicionar efeito tremolo
     OU adicionar LFOs multi uso
